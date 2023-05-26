@@ -44,6 +44,8 @@ public:
     double _cwnd;
     uint32_t _acks_received;
     uint32_t _nacks_received;
+    simtime_picosec _base_rtt;
+    uint64_t _alpha, _beta;
 
     void print_stats();
 

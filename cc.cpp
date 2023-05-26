@@ -33,6 +33,11 @@ CCSrc::CCSrc(EventList &eventlist)
     _ssthresh = 0xFFFFFFFFFF;
     _flightsize = 0;
     _flow._name = _nodename;
+
+    _base_rtt = timeFromSec(1000);
+    _alpha = 1;
+    _beta = 3;
+
     setName(_nodename);
 }
 
@@ -82,10 +87,22 @@ void CCSrc::connect(Route* routeout, Route* routeback, CCSink& sink, simtime_pic
 void CCSrc::processNack(const CCNack& nack){    
     //cout << "CC " << _name << " got NACK " <<  nack.ackno() << _highest_sent << " at " << timeAsMs(eventlist().now()) << " us" << endl;    
     _nacks_received ++;    
-    _flightsize -= _mss;    
+    _flightsize -= _mss;
+
+    simtime_picosec rtt = eventlist().now() - nack.ts();
+
+    if (rtt < _base_rtt) {
+        _base_rtt = rtt;
+    }    
     
+    uint64_t diff = ((_cwnd / _base_rtt) - (_cwnd / rtt)) * _base_rtt;   
+    // cout << "RTT: " << timeAsMs(rtt) << " Base RTT " << timeAsMs(_base_rtt) << endl;
+
     if (nack.ackno()>=_next_decision) {    
-        _cwnd = _cwnd / 2;    
+        if (diff > _beta) {
+            _cwnd -= _mss;
+        }
+
         if (_cwnd < _mss)    
             _cwnd = _mss;    
     
@@ -103,12 +120,26 @@ void CCSrc::processAck(const CCAck& ack) {
     CCAck::seq_t ackno = ack.ackno();    
     
     _acks_received++;    
-    _flightsize -= _mss;    
+    _flightsize -= _mss;
+
+    simtime_picosec rtt = eventlist().now() - ack.ts();
+
+    if (rtt < _base_rtt) {
+        _base_rtt = rtt;
+    }
+
+    if (rtt > 2 * _base_rtt) {
+        return;
+    }
+
+    uint64_t diff = ((_cwnd / _base_rtt) - (_cwnd / rtt)) * _base_rtt;   
     
-    if (_cwnd < _ssthresh)    
-        _cwnd += _mss;    
-    else    
-        _cwnd += _mss*_mss / _cwnd;    
+    if (diff < _alpha) {   
+        _cwnd += _mss;
+    } else {
+        _cwnd += 0.2 * _mss;
+    }
+
     
     //cout << "CWNDI " << _cwnd/_mss << endl;    
 }    
