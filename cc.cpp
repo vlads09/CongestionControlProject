@@ -34,7 +34,7 @@ CCSrc::CCSrc(EventList &eventlist)
     _flightsize = 0;
     _flow._name = _nodename;
 
-    _base_rtt = timeFromSec(1000);
+    _base_rtt = timeFromSec(3000);
     _alpha = _mss;
     _beta = 3 * _mss;
 
@@ -95,12 +95,12 @@ void CCSrc::processNack(const CCNack& nack){
         _base_rtt = rtt;
     }    
     
-    uint64_t diff = ((_cwnd / _base_rtt) - (_cwnd / rtt)) * _base_rtt;   
+    double diff = ((_cwnd / _base_rtt) - (_cwnd / rtt)) * _base_rtt;   
     // cout << "RTT: " << timeAsMs(rtt) << " Base RTT " << timeAsMs(_base_rtt) << endl;
 
     if (nack.ackno()>=_next_decision) {    
         if (diff > _beta) {
-            _cwnd -= _mss;
+            _cwnd -= 2 * _mss;
         }
 
         if (_cwnd < _mss)    
@@ -132,12 +132,12 @@ void CCSrc::processAck(const CCAck& ack) {
         return;
     }
 
-    uint64_t diff = ((_cwnd / _base_rtt) - (_cwnd / rtt)) * _base_rtt;   
+    double diff = ((_cwnd / _base_rtt) - (_cwnd / rtt)) * _base_rtt;   
     
     if (diff < _alpha) {   
         _cwnd += _mss;
-    } else {
-        _cwnd += 0.2 * _mss;
+    } else if (diff > _beta) {
+        _cwnd -= 2 * _mss;
     }
 
     
