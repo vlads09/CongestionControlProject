@@ -30,14 +30,14 @@ CCSrc::CCSrc(EventList& eventlist) : EventSource(eventlist, "cc"), _flow(NULL) {
   _node_num = _global_node_count++;
   _nodename = "CCsrc " + to_string(_node_num);
 
-  _cwnd = 10 * _mss;
+  _cwnd = 4 * _mss;
   _ssthresh = 0xFFFFFFFFFF;
   _flightsize = 0;
   _flow._name = _nodename;
 
-  _base_rtt = timeFromSec(1000);
-  _alpha = 0.1*_cwnd;
-  _beta = 0.3*_cwnd;
+  _base_rtt = timeFromSec(3000);
+  _alpha = 2 * _mss;
+  _beta = 6 * _mss;
 
   setName(_nodename);
 }
@@ -99,19 +99,29 @@ void CCSrc::processNack(const CCNack& nack) {
     _base_rtt = rtt;
   }
 
+  if (rtt > 4 * _base_rtt) {
+    return;
+  }
+
   double diff = ((_cwnd / _base_rtt) - (_cwnd / rtt)) * _base_rtt;
   // cout << "RTT: " << timeAsMs(rtt) << " Base RTT " << timeAsMs(_base_rtt) <<
   // endl;
 
   if (nack.ackno() >= _next_decision) {
+    // if (diff > _beta) {
+    //   _cwnd -= 2 * _mss;
+    // }
+
     if (diff < _alpha) {
-    _cwnd += _mss;
-  } else if (diff > _beta) {
-    _cwnd -= _mss;
-  }
-
-    if (_cwnd < _mss) _cwnd = _mss;
-
+      _cwnd += 4 * _mss;
+    } else if (diff > _beta) {
+      _cwnd -= _mss;
+    }
+    if (_alpha <= _cwnd && _cwnd <= _beta) {
+      _cwnd += _mss;
+      _alpha += _mss;
+      _beta -= _mss;
+    }
     _ssthresh = _cwnd;
 
     // cout << "CWNDD " << _cwnd/_mss << endl;
@@ -134,18 +144,23 @@ void CCSrc::processAck(const CCAck& ack) {
     _base_rtt = rtt;
   }
 
-  if (rtt > 2 * _base_rtt) {
+  if (rtt > 4 * _base_rtt) {
     return;
   }
 
-  uint64_t diff = ((_cwnd / _base_rtt) - (_cwnd / rtt)) * _base_rtt;
+  double diff = ((_cwnd / _base_rtt) - (_cwnd / rtt)) * _base_rtt;
 
   if (diff < _alpha) {
     _cwnd += _mss;
   } else if (diff > _beta) {
-    _cwnd -= _mss;
+    _cwnd -= 4 * _mss;
   }
 
+  if (_alpha <= _cwnd && _cwnd <= _beta) {
+    _cwnd -= _mss;
+    _alpha += _mss / 2;
+    _beta -= _mss / 2;
+  }
   // cout << "CWNDI " << _cwnd/_mss << endl;
 }
 
@@ -174,8 +189,8 @@ void CCSrc::receivePacket(Packet& pkt) {
   while (_flightsize + _mss < _cwnd) send_packet();
 }
 
-// Note: the data sequence number is the number of Byte1 of the packet, not the
-// last byte.
+// Note: the data sequence number is the number of Byte1 of the packet, not
+// the last byte.
 /* Functia care se este chemata pentru transmisia unui pachet */
 void CCSrc::send_packet() {
   CCPacket* p = NULL;
@@ -203,8 +218,8 @@ void CCSrc::doNextEvent() {
 }
 
 ////////////////////////////////////////////////////////////////
-//  CC SINK Aici este codul ce ruleaza pe receptor, in mare nu o sa aducem multe
-//  modificari
+//  CC SINK Aici este codul ce ruleaza pe receptor, in mare nu o sa aducem
+//  multe modificari
 ////////////////////////////////////////////////////////////////
 
 /* Only use this constructor when there is only one for to this receiver */
