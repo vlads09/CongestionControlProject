@@ -35,8 +35,8 @@ CCSrc::CCSrc(EventList &eventlist)
     _flow._name = _nodename;
 
     _base_rtt = timeFromSec(1000);
-    _alpha = 1;
-    _beta = 3;
+    _alpha = _mss;
+    _beta = 3 * _mss;
 
     setName(_nodename);
 }
